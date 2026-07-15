@@ -1,0 +1,47 @@
+"""
+Customer balance-tier segmentation.
+
+Answers: "Which customer segments contribute disproportionately to deposits?"
+Aggregates each customer's total balance across all their accounts, scores them
+into quintile tiers, and quantifies deposit concentration (Pareto check).
+"""
+import pandas as pd
+
+accounts = pd.read_csv("data/accounts.csv")
+customers = pd.read_csv("data/customers.csv")
+
+cust_balance = accounts.groupby("customer_id")["balance"].sum().reset_index()
+cust_balance.columns = ["customer_id", "total_balance"]
+
+# Quintile tiers, highest balance = Private Banking
+cust_balance["tier"] = pd.qcut(
+    cust_balance["total_balance"], 5,
+    labels=["Basic", "Silver", "Gold", "Platinum", "Private Banking"]
+)
+
+tier_summary = cust_balance.groupby("tier", observed=True).agg(
+    customers=("customer_id", "count"),
+    total_balance=("total_balance", "sum"),
+).reset_index()
+tier_summary["balance_share_pct"] = round(100 * tier_summary.total_balance / tier_summary.total_balance.sum(), 1)
+tier_summary["customer_share_pct"] = round(100 * tier_summary.customers / tier_summary.customers.sum(), 1)
+tier_summary["avg_balance"] = round(tier_summary.total_balance / tier_summary.customers, 0)
+tier_summary = tier_summary.sort_values("total_balance", ascending=False)
+
+# Pareto check: % of customers needed to reach 80% of total deposits
+sorted_bal = cust_balance.sort_values("total_balance", ascending=False).reset_index(drop=True)
+sorted_bal["cum_pct"] = 100 * sorted_bal.total_balance.cumsum() / sorted_bal.total_balance.sum()
+pareto_n = (sorted_bal.cum_pct <= 80).sum()
+pareto_pct = round(100 * pareto_n / len(sorted_bal), 1)
+
+cust_balance.to_csv("data/customer_balance_tiers.csv", index=False)
+tier_summary.to_csv("data/tier_summary.csv", index=False)
+
+print("=== Tier Summary ===")
+print(tier_summary.to_string(index=False))
+print(f"\nPareto check: {pareto_pct}% of customers hold 80% of total deposits")
+print(f"Total customers with at least one account: {len(cust_balance)}")
+
+top10 = sorted_bal.head(10)[["customer_id", "total_balance"]]
+print("\n=== Top 10 Customers by Balance ===")
+print(top10.to_string(index=False))
