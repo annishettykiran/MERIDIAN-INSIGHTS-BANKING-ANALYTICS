@@ -1,0 +1,24 @@
+"""
+Loads the generated CSVs into a SQLite database using schema.sql,
+so analysis_queries.sql can be run directly against it.
+
+Usage: python load_db.py
+"""
+import sqlite3
+import pandas as pd
+
+conn = sqlite3.connect("banking.db")
+
+with open("schema.sql") as f:
+    conn.executescript(f.read())
+
+tables = ["customers", "branches", "accounts", "transactions", "loans"]
+for tbl in tables:
+    df = pd.read_csv(f"data/{tbl}.csv")
+    df.to_sql(tbl, conn, if_exists="append", index=False)
+    print(f"Loaded {len(df):,} rows into {tbl}")
+
+conn.commit()
+conn.close()
+print("\nDatabase ready: banking.db")
+print("Run queries with: sqlite3 banking.db < analysis_queries.sql")
