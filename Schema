@@ -1,0 +1,53 @@
+-- Vantage Bank Analytics — Schema
+-- Normalized relational model: customers, branches, accounts, transactions, loans
+
+CREATE TABLE customers (
+    customer_id     TEXT PRIMARY KEY,
+    region          TEXT NOT NULL,
+    age_group       TEXT NOT NULL,
+    signup_date     DATE NOT NULL
+);
+
+CREATE TABLE branches (
+    branch_id       TEXT PRIMARY KEY,
+    region          TEXT NOT NULL,
+    branch_type     TEXT NOT NULL   -- Urban / Semi-Urban / Rural
+);
+
+CREATE TABLE accounts (
+    account_id      TEXT PRIMARY KEY,
+    customer_id     TEXT NOT NULL REFERENCES customers(customer_id),
+    branch_id       TEXT NOT NULL REFERENCES branches(branch_id),
+    account_type    TEXT NOT NULL,  -- Savings / Current / Fixed Deposit
+    open_date       DATE NOT NULL,
+    balance         REAL NOT NULL
+);
+
+CREATE TABLE transactions (
+    transaction_id      TEXT PRIMARY KEY,
+    account_id           TEXT NOT NULL REFERENCES accounts(account_id),
+    transaction_date     DATE NOT NULL,
+    channel               TEXT NOT NULL,  -- Mobile App / Internet Banking / Branch / ATM
+    transaction_type      TEXT NOT NULL,  -- Deposit / Withdrawal / Transfer / Bill Payment
+    amount                 REAL NOT NULL,
+    is_fraud                INTEGER NOT NULL  -- boolean 0/1
+);
+
+CREATE TABLE loans (
+    loan_id           TEXT PRIMARY KEY,
+    customer_id        TEXT NOT NULL REFERENCES customers(customer_id),
+    region              TEXT NOT NULL,
+    loan_type            TEXT NOT NULL,
+    amount                REAL NOT NULL,
+    interest_rate          REAL NOT NULL,
+    disbursed_date          DATE NOT NULL,
+    status                   TEXT NOT NULL  -- Active / Closed / Default
+);
+
+CREATE INDEX idx_accounts_customer ON accounts(customer_id);
+CREATE INDEX idx_accounts_branch ON accounts(branch_id);
+CREATE INDEX idx_txn_account ON transactions(account_id);
+CREATE INDEX idx_txn_date ON transactions(transaction_date);
+CREATE INDEX idx_loans_customer ON loans(customer_id);
+CREATE INDEX idx_loans_region ON loans(region);
+
