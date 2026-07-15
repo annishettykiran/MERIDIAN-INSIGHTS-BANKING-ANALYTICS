@@ -1,0 +1,125 @@
+# Meridian Insights — Deposits, Digital Adoption, Fraud & Loan Risk
+
+An end-to-end banking analytics project answering real business questions using SQL, Python (Pandas), and a 5-page BI dashboard — built to demonstrate the same workflow used in production Data Analyst work: raw relational data → SQL modeling → Python segmentation → decision-ready dashboard.
+
+**[Dashboard images](./images)** · Built by Kiran Kumar Annishetty
+
+---
+
+## About the dataset
+
+A synthetic banking dataset — **5 relational tables, ~1,27,000 total rows**, spanning Jan 2023–Jun 2026:
+
+| Table | Rows | Grain |
+|---|---|---|
+| `customers` | 10,000 | one customer |
+| `branches` | 120 | one branch |
+| `accounts` | 14,000 | one account |
+| `transactions` | **1,00,000** | one transaction |
+| `loans` | 3,200 | one loan |
+
+Generated programmatically (`generate_data.py`), with intentional, documented patterns rather than pure randomness:
+- Digital channel adoption rises steadily over time (37% → 74%)
+- Fraud probability is higher on digital channels, high-value transfers
+- Urban branches carry higher balances than rural
+- Central region carries a higher loan default rate than other regions
+- Deposit balances follow a realistic skew (a small group of high-balance customers)
+
+## Business questions answered
+
+1. **What's the overall health of the deposit base, and how is it distributed by region and account type?**
+2. **How has digital channel adoption changed over time, and which channel carries the most fraud risk?**
+3. **Which customer segments (by balance) contribute disproportionately to total deposits?**
+4. **Where is loan default risk concentrated, and does it correlate with region or branch type?**
+
+## Key findings
+
+- **Digital adoption nearly doubled** — from 37.2% (Q1 2023) to 74.3% (Q1 2026) of all transactions.
+- **Digital channels carry ~3.1x the fraud rate** of Branch/ATM (1.5% avg vs. 0.5% avg) — a genuine risk-monitoring insight, not just a vanity stat.
+- **Wealth is concentrated**: the top 20% of customers by balance ("Private Banking" tier) hold **47.3%** of total deposits; 49.7% of customers hold 80% of deposits.
+- **Central region defaults at 12.2%**, roughly double the national average (7.3%) — while South and West both sit under 6.2%, pointing to a specific regional underwriting issue rather than a system-wide one.
+
+## Tech stack & approach
+
+| Layer | Tool | What it does |
+|---|---|---|
+| Data generation | Python (NumPy) | Builds the synthetic relational dataset with embedded realistic patterns |
+| Data modeling | SQL (SQLite) | Normalized schema, joins, aggregation queries answering each business question |
+| Customer segmentation | Python (Pandas) | Balance-tier scoring via quintile ranking, Pareto concentration analysis |
+| Dashboard | Power BI / HTML mockups | 5-page report: Executive Overview, Customer Segmentation, Channel Performance, Loan Risk, Summary |
+
+## Repo structure
+
+```
+meridian-insights/
+├── README.md
+├── generate_data.py            # Synthetic dataset generator
+├── schema.sql                  # Relational schema (5 tables, indexed)
+├── analysis_queries.sql        # SQL answering all business questions
+├── segmentation_analysis.py    # Python balance-tier segmentation + Pareto analysis
+├── load_db.py                  # Loads CSVs into SQLite per schema
+├── requirements.txt
+├── data/
+│   ├── customers.csv
+│   ├── branches.csv
+│   ├── accounts.csv
+│   ├── transactions.csv
+│   ├── loans.csv
+│   ├── customer_balance_tiers.csv   # Output of segmentation_analysis.py
+│   └── tier_summary.csv
+├── Meridian_Insights_Data.xlsx # All tables as one multi-sheet workbook
+└── images/
+    ├── page1_executive_overview.jpg
+    ├── page2_customer_segmentation.jpg
+    ├── page3_channel_performance.jpg
+    ├── page4_loan_risk.jpg
+    └── summary_key_findings.jpg
+```
+
+## How to reproduce
+
+```bash
+pip install -r requirements.txt
+
+# 1. Generate the dataset
+python generate_data.py
+
+# 2. Load into SQLite and run the analysis queries
+python load_db.py
+sqlite3 banking.db < analysis_queries.sql
+
+# 3. Run customer segmentation
+python segmentation_analysis.py
+```
+
+## Rebuilding this in Power BI Desktop
+
+1. **Get Data → Text/CSV**, import all files from `/data` (including `customer_balance_tiers.csv` and `tier_summary.csv`)
+2. Model relationships:
+   - `accounts[customer_id] → customers[customer_id]` (Many-to-1)
+   - `accounts[branch_id] → branches[branch_id]` (Many-to-1)
+   - `transactions[account_id] → accounts[account_id]` (Many-to-1)
+   - `loans[customer_id] → customers[customer_id]` (Many-to-1)
+   - `customer_balance_tiers[customer_id] → customers[customer_id]` (1-to-1)
+3. Core DAX measures:
+   ```
+   Total Deposits = SUM(accounts[balance])
+   Total Customers = COUNTROWS(customers)
+   Total Transactions = COUNTROWS(transactions)
+   Digital Adoption % =
+       VAR DigitalTxns = CALCULATE(COUNTROWS(transactions), transactions[channel] IN {"Mobile App","Internet Banking"})
+       RETURN DIVIDE(DigitalTxns, COUNTROWS(transactions))
+   Fraud Rate % = DIVIDE(CALCULATE(COUNTROWS(transactions), transactions[is_fraud] = TRUE()), COUNTROWS(transactions))
+   Default Rate % = DIVIDE(CALCULATE(COUNTROWS(loans), loans[status] = "Default"), COUNTROWS(loans))
+   Avg Interest Rate = AVERAGE(loans[interest_rate])
+   ```
+4. Build visuals per the `/images` mockups: KPI cards, quarterly adoption trend line, region/channel bar charts, tier donut, loan default bar chart by region.
+
+## Notes on data quality decisions
+
+- `Total Customers` should read from the `customers` table directly (`COUNTROWS(customers)`), **not** `DISTINCTCOUNT(accounts[customer_id])` — the latter only counts customers who have opened at least one account (~7,572 of 10,000), which undercounts the true customer base by design of the relationship.
+- The "X% of customers hold 80% of deposits" Pareto stat is intentionally **not** a live DAX measure — a dynamic cumulative-percentage calculation is expensive (effectively O(n²) via nested `CALCULATE`) for a single static insight. The number comes from `segmentation_analysis.py` and is pinned as a static reference value.
+
+## Author
+
+**Kiran Kumar Annishetty — Data Analyst | Power BI Developer
